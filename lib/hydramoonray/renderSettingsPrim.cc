@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "renderSettingsPrim.h"
+#include "renderDelegate.h"
 
 #include "pxr/imaging/hd/sceneDelegate.h"
 
@@ -22,6 +23,12 @@ HdMoonray_RenderSettings::_Sync(HdSceneDelegate *sceneDelegate,
                                 HdRenderParam *renderParam,
                                 const HdDirtyBits *dirtyBits)
 {
+    HdRenderSettings::_Sync(sceneDelegate, renderParam, dirtyBits);
+    if ((*dirtyBits) & HdRenderSettings::DirtyRenderingColorSpace) {
+        HdMoonray_RenderDelegate::get(renderParam).SetRenderSetting(
+            TfToken("renderingColorSpace"),
+            VtValue(GetRenderingColorSpace()));
+    }
     if (*dirtyBits != HdRenderSettings::Clean) {
         ++mVersion;
     }

@@ -4,6 +4,7 @@
 #pragma once
 
 #include "MoonrayScene.h"
+#include "ColorManagement.h"
 #include "RenderSettings.h"
 #include "Options.h"
 
@@ -91,6 +92,8 @@ public:
     bool setRenderTags(pxr::HdRenderIndex* index, const pxr::TfTokenVector&);
 
     const RenderSettings& renderSettings() const { return mRenderSettings; }
+    ColorManagement& colorManagement() { return mColorManagement; }
+    const ColorManagement& colorManagement() const { return mColorManagement; }
 
     void markAllLightsDirty(pxr::HdDirtyBits bits);
     void markAllProceduralsDirty(pxr::HdDirtyBits bits);
@@ -107,6 +110,9 @@ private:
     } renderParam;
 
     void _constructor();
+    void setRenderingColorSpace(const pxr::TfToken& token);
+    void markColorDependentSprimsDirty();
+    ColorManagement mColorManagement;
     MoonrayScene mScene;
     Options mOptions;
    

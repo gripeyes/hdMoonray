@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "ColorManagement.h"
 #include "ValueConverter.h"
 #include "HdmLog.h"
 
@@ -55,6 +56,11 @@ public:
     template <typename T> void set(const T& value0, const T& value1);
 
     void setColor(const pxr::GfVec3f& value) { set(reinterpret_cast<const rdl2::Rgb&>(value)); }
+    void setColorManaged(const pxr::VtValue& value,
+                         const ColorManagement* colorManagement,
+                         const pxr::TfToken& sourceColorSpace = pxr::TfToken())
+    { ValueConverter::setAttribute(mSceneObject, mAttribute, value,
+                                   colorManagement, sourceColorSpace); }
     void setToDefault() { ValueConverter::setDefault(mSceneObject, mAttribute); }    
     void bind(const MoonrayObject& obj);
 
@@ -152,6 +158,11 @@ public:
     void assign(const MoonrayObject& obj, const std::string& partName, const MoonrayAssignment& assignment);
 
     template <typename T> void setData(const std::string& name, const T& value, const pxr::TfToken& role) = delete;
+    void setDataColorManaged(const std::string& name,
+                             const pxr::VtValue& value,
+                             const pxr::TfToken& role,
+                             const ColorManagement* colorManagement,
+                             const pxr::TfToken& sourceColorSpace = pxr::TfToken());
     void setDataRate(DataRate rate) { mSceneObject->asA<rdl2::UserData>()->setRate(rate); }
 
     void beginUpdate() { mSceneObject->beginUpdate(); }
@@ -478,6 +489,37 @@ inline void MoonrayObject::setData<pxr::VtValue>(const std::string& name, const 
     } else {
         Logger::warn(objectName(), ": ", value.GetTypeName(), " not translated");
     }
+}
+
+inline void
+MoonrayObject::setDataColorManaged(const std::string& name,
+                                   const pxr::VtValue& value,
+                                   const pxr::TfToken& role,
+                                   const ColorManagement* colorManagement,
+                                   const pxr::TfToken& sourceColorSpace)
+{
+    if (colorManagement && role == pxr::HdPrimvarRoleTokens->color) {
+        if (value.IsHolding<pxr::VtVec3fArray>()) {
+            pxr::VtVec3fArray colors = value.UncheckedGet<pxr::VtVec3fArray>();
+            if (sourceColorSpace.IsEmpty()) {
+                colors = colorManagement->toWorkingSpace(colors);
+            } else {
+                for (pxr::GfVec3f& color : colors) {
+                    color = colorManagement->toWorkingSpace(color, sourceColorSpace);
+                }
+            }
+            setData(name, colors, role);
+            return;
+        }
+        if (value.IsHolding<pxr::GfVec3f>()) {
+            setData(name,
+                    colorManagement->toWorkingSpace(
+                        value.UncheckedGet<pxr::GfVec3f>(), sourceColorSpace),
+                    role);
+            return;
+        }
+    }
+    setData(name, value, role);
 }
 
 

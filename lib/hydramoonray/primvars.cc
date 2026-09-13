@@ -12,6 +12,7 @@
 #include "tokens.h"
 
 #include <pxr/imaging/hd/extComputationUtils.h>
+#include <pxr/imaging/hd/primvarsSchema.h>
 #include <pxr/base/gf/vec2f.h>
 
 
@@ -38,6 +39,23 @@ namespace {
         };
         if (names.count(name)) return true;
         return false;
+    }
+
+    TfToken primvarColorSpace(HdSceneDelegate* sceneDelegate,
+                              const SdfPath& primId,
+                              const TfToken& name)
+    {
+        if (!sceneDelegate) return TfToken();
+        HdSceneIndexBaseRefPtr sceneIndex =
+            sceneDelegate->GetRenderIndex().GetTerminalSceneIndex();
+        if (!sceneIndex) return TfToken();
+        const HdSceneIndexPrim prim = sceneIndex->GetPrim(primId);
+        const HdPrimvarSchema primvar =
+            HdPrimvarsSchema::GetFromParent(prim.dataSource).GetPrimvar(name);
+        if (HdTokenDataSourceHandle colorSpace = primvar.GetColorSpace()) {
+            return colorSpace->GetTypedValue(0.0f);
+        }
+        return TfToken();
     }
 
     // utility to set a Vec3f attribute
@@ -194,9 +212,10 @@ HdMoonray_GeometryBase::primvarChanged(HdSceneDelegate *sceneDelegate,
         // supply the correct primvar name for the renderer, but the Hydra primvar "normals" originates from a non-primvar attribute in the
         // UsdGeom schemas, so it makes sense to translate "normals" to "normal" in this particular case..
         if (name == HdTokens->normals) {
-            primvarUserData(renderDelegate, HdMoonrayTokens->normal, value, interp, role);
+            primvarUserData(sceneDelegate, renderDelegate, HdMoonrayTokens->normal,
+                            value, interp, role);
         } else {
-            primvarUserData(renderDelegate, name, value, interp, role);
+            primvarUserData(sceneDelegate, renderDelegate, name, value, interp, role);
         }
     }
 }
@@ -258,7 +277,8 @@ namespace hdMoonray {
 
 
 void
-HdMoonray_GeometryBase::primvarUserData(HdMoonray_RenderDelegate& renderDelegate,
+HdMoonray_GeometryBase::primvarUserData(HdSceneDelegate* sceneDelegate,
+                               HdMoonray_RenderDelegate& renderDelegate,
                                const TfToken& name,
                                const VtValue& value,
                                const HdInterpolation& interp,
@@ -285,7 +305,9 @@ HdMoonray_GeometryBase::primvarUserData(HdMoonray_RenderDelegate& renderDelegate
     // store the primvar values into the UserData object
     UpdateGuard guard(renderDelegate, userData);
     setUserDataInterpolation(userData, interp);
-    userData.setData(name, value, role);
+    userData.setDataColorManaged(name, value, role,
+                                 &renderDelegate.colorManagement(),
+                                 primvarColorSpace(sceneDelegate, getId(), name));
 }
 
 
@@ -361,6 +383,4 @@ HdMoonray_GeometryBase::setVec3fPrimvarMb(HdSceneDelegate* sceneDelegate,
 }
 
 }
-
-
 

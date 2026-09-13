@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "ValueConverter.h"
+#include "ColorManagement.h"
 #include "HdmLog.h"
 
 #include <cstdint>
@@ -183,8 +184,96 @@ static bool _setAttribute(SceneObject* sceneObj, const Attribute* attribute, con
     }
 }
 
+static bool
+_setRgbAttribute(SceneObject* sceneObj, const Attribute* attribute,
+                 const pxr::VtValue& val, const ColorManagement* colorManagement,
+                 const pxr::TfToken& sourceColorSpace)
+{
+    if (val.IsHolding<pxr::GfVec3f>()) {
+        pxr::GfVec3f color = val.UncheckedGet<pxr::GfVec3f>();
+        if (colorManagement) color = colorManagement->toWorkingSpace(color, sourceColorSpace);
+        _set(sceneObj, attribute, Rgb(color[0], color[1], color[2]));
+        _clearBinding(sceneObj, attribute);
+        return true;
+    }
+    if (val.IsHolding<pxr::GfVec4f>()) {
+        pxr::GfVec4f color = val.UncheckedGet<pxr::GfVec4f>();
+        if (colorManagement) color = colorManagement->toWorkingSpace(color, sourceColorSpace);
+        _set(sceneObj, attribute, Rgb(color[0], color[1], color[2]));
+        _clearBinding(sceneObj, attribute);
+        return true;
+    }
+    return false;
+}
+
+static bool
+_setRgbaAttribute(SceneObject* sceneObj, const Attribute* attribute,
+                  const pxr::VtValue& val, const ColorManagement* colorManagement,
+                  const pxr::TfToken& sourceColorSpace)
+{
+    if (!val.IsHolding<pxr::GfVec4f>()) return false;
+    pxr::GfVec4f color = val.UncheckedGet<pxr::GfVec4f>();
+    if (colorManagement) color = colorManagement->toWorkingSpace(color, sourceColorSpace);
+    _set(sceneObj, attribute, Rgba(color[0], color[1], color[2], color[3]));
+    _clearBinding(sceneObj, attribute);
+    return true;
+}
+
+static bool
+_setRgbVectorAttribute(SceneObject* sceneObj, const Attribute* attribute,
+                       const pxr::VtValue& val, const ColorManagement* colorManagement,
+                       const pxr::TfToken& sourceColorSpace)
+{
+    if (!val.IsHolding<pxr::VtArray<pxr::GfVec3f>>()) return false;
+    pxr::VtArray<pxr::GfVec3f> colors = val.UncheckedGet<pxr::VtArray<pxr::GfVec3f>>();
+    if (colorManagement && sourceColorSpace.IsEmpty()) {
+        colors = colorManagement->toWorkingSpace(colors);
+    } else if (colorManagement) {
+        for (pxr::GfVec3f& color : colors) {
+            color = colorManagement->toWorkingSpace(color, sourceColorSpace);
+        }
+    }
+    RgbVector output;
+    output.reserve(colors.size());
+    for (const auto& color : colors) output.emplace_back(color[0], color[1], color[2]);
+    _set(sceneObj, attribute, output);
+    _clearBinding(sceneObj, attribute);
+    return true;
+}
+
+static bool
+_setRgbaVectorAttribute(SceneObject* sceneObj, const Attribute* attribute,
+                        const pxr::VtValue& val, const ColorManagement* colorManagement,
+                        const pxr::TfToken& sourceColorSpace)
+{
+    if (!val.IsHolding<pxr::VtArray<pxr::GfVec4f>>()) return false;
+    pxr::VtArray<pxr::GfVec4f> colors = val.UncheckedGet<pxr::VtArray<pxr::GfVec4f>>();
+    if (colorManagement && sourceColorSpace.IsEmpty()) {
+        colors = colorManagement->toWorkingSpace(colors);
+    } else if (colorManagement) {
+        for (pxr::GfVec4f& color : colors) {
+            color = colorManagement->toWorkingSpace(color, sourceColorSpace);
+        }
+    }
+    RgbaVector output;
+    output.reserve(colors.size());
+    for (const auto& color : colors) output.emplace_back(color[0], color[1], color[2], color[3]);
+    _set(sceneObj, attribute, output);
+    _clearBinding(sceneObj, attribute);
+    return true;
+}
+
 void
 ValueConverter::setAttribute(SceneObject* sceneObj, const Attribute* attribute, const pxr::VtValue& val)
+{
+    setAttribute(sceneObj, attribute, val, nullptr);
+}
+
+void
+ValueConverter::setAttribute(SceneObject* sceneObj, const Attribute* attribute,
+                             const pxr::VtValue& val,
+                             const ColorManagement* colorManagement,
+                             const pxr::TfToken& sourceColorSpace)
 {
     if (val.IsEmpty()) {
         setDefault(sceneObj, attribute);
@@ -282,11 +371,10 @@ ValueConverter::setAttribute(SceneObject* sceneObj, const Attribute* attribute, 
         if (_setAttributeRef<String, pxr::TfToken>(sceneObj, attribute, val)) return;
         break;
     case TYPE_RGB:
-        if (_setAttributeRef<Rgb, pxr::GfVec3f>(sceneObj, attribute, val)) return;
-        if (_setAttributeRef<Rgb, pxr::GfVec4f>(sceneObj, attribute, val)) return; // in seaside scene preview shaders
+        if (_setRgbAttribute(sceneObj, attribute, val, colorManagement, sourceColorSpace)) return;
         break;
     case TYPE_RGBA:
-        if (_setAttributeRef<Rgba, pxr::GfVec4f>(sceneObj, attribute, val)) return;
+        if (_setRgbaAttribute(sceneObj, attribute, val, colorManagement, sourceColorSpace)) return;
         break;
     case TYPE_VEC2F:
         if (_setAttributeRef<Vec2f, pxr::GfVec2f>(sceneObj, attribute, val)) return;
@@ -342,10 +430,10 @@ ValueConverter::setAttribute(SceneObject* sceneObj, const Attribute* attribute, 
         if (_setAttribute<StringVector, pxr::VtArray<std::string>>(sceneObj, attribute, val)) return;
         break;
     case TYPE_RGB_VECTOR:
-        if (_setAttribute<RgbVector, pxr::VtArray<pxr::GfVec3f>>(sceneObj, attribute, val)) return;
+        if (_setRgbVectorAttribute(sceneObj, attribute, val, colorManagement, sourceColorSpace)) return;
         break;
     case TYPE_RGBA_VECTOR:
-        if (_setAttribute<RgbaVector, pxr::VtArray<pxr::GfVec4f>>(sceneObj, attribute, val)) return;
+        if (_setRgbaVectorAttribute(sceneObj, attribute, val, colorManagement, sourceColorSpace)) return;
         break;
     case TYPE_VEC2F_VECTOR:
         if (_setAttribute<Vec2fVector, pxr::VtArray<pxr::GfVec2f>>(sceneObj, attribute, val)) return;

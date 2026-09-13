@@ -16,15 +16,21 @@
 
 #include <pxr/base/vt/value.h>
 #include <pxr/base/vt/array.h>
+#include <pxr/base/tf/token.h>
 
 #include <scene_rdl2/scene/rdl2/SceneObject.h>
 
 using namespace scene_rdl2::rdl2;
 
-namespace hdMoonray { namespace ValueConverter {
+namespace hdMoonray {
+class ColorManagement;
+namespace ValueConverter {
 
 // copy usd attribute to scene_rdl2 attribute
 void setAttribute(SceneObject* sceneObj, const Attribute*, const pxr::VtValue& val);
+void setAttribute(SceneObject* sceneObj, const Attribute*, const pxr::VtValue& val,
+                  const ColorManagement* colorManagement,
+                  const pxr::TfToken& sourceColorSpace = pxr::TfToken());
 //void setAttribute(SceneObject* sceneObj, const std::string& name, const pxr::VtValue& val);
 
 // reset the attribute to default
@@ -34,5 +40,4 @@ void setDefault(SceneObject* sceneObj, const Attribute*);
 // set a binding on an attribute (also sets value to unit)
 void setBinding(SceneObject* sceneObject, const Attribute*,SceneObject* binding);
 
-}}
-
+} }

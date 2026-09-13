@@ -52,6 +52,46 @@ endif()
 find_package(JPEG REQUIRED)
 find_package(OpenImageIO REQUIRED)
 
+# Houdini ships an OCIO build in the SideFX namespace.  Houdini-facing
+# hdMoonray must pair those headers and that library; MoonRay core continues to
+# use the standard OCIO target from the dependency install.
+set(HDMOONRAY_HOUDINI_OCIO_TARGET "")
+set(HDMOONRAY_HOUDINI_OCIO_INCLUDE_DIR "")
+set(HDMOONRAY_HOUDINI_INSTALL_DIR "" CACHE PATH
+    "Houdini install root used to locate SideFX OpenColorIO")
+if(APPLE AND NOT HDMOONRAY_HOUDINI_INSTALL_DIR)
+    if(DEFINED HoudiniInstallRoot)
+        set(HDMOONRAY_HOUDINI_INSTALL_DIR "${HoudiniInstallRoot}")
+    elseif(DEFINED ENV{HOUDINI_INSTALL_DIR})
+        set(HDMOONRAY_HOUDINI_INSTALL_DIR "$ENV{HOUDINI_INSTALL_DIR}")
+    else()
+        set(HDMOONRAY_HOUDINI_INSTALL_DIR "/Applications/Houdini/Houdini22.0.440")
+    endif()
+endif()
+
+if(APPLE AND HDMOONRAY_HOUDINI_INSTALL_DIR)
+    set(_houdiniFrameworkRoot
+        "${HDMOONRAY_HOUDINI_INSTALL_DIR}/Frameworks/Houdini.framework/Versions/Current")
+    set(_houdiniOcioInclude "${_houdiniFrameworkRoot}/Resources/toolkit/include")
+    set(_houdiniOcioLibrary "${_houdiniFrameworkRoot}/Libraries/libOpenColorIO_sidefx.dylib")
+    if(EXISTS "${_houdiniOcioInclude}/OpenColorIO/OpenColorIO.h" AND
+       EXISTS "${_houdiniOcioLibrary}")
+        add_library(HdMoonrayHoudiniOpenColorIO SHARED IMPORTED GLOBAL)
+        set_target_properties(HdMoonrayHoudiniOpenColorIO PROPERTIES
+            IMPORTED_LOCATION "${_houdiniOcioLibrary}"
+            INTERFACE_INCLUDE_DIRECTORIES "${_houdiniOcioInclude}")
+        set(HDMOONRAY_HOUDINI_OCIO_TARGET HdMoonrayHoudiniOpenColorIO)
+        set(HDMOONRAY_HOUDINI_OCIO_INCLUDE_DIR "${_houdiniOcioInclude}")
+        message(STATUS "hdMoonray: using Houdini SideFX OpenColorIO at ${_houdiniOcioLibrary}")
+    endif()
+endif()
+
+if(NOT HDMOONRAY_HOUDINI_OCIO_TARGET)
+    find_package(OpenColorIO 2.5 REQUIRED)
+    set(HDMOONRAY_HOUDINI_OCIO_TARGET OpenColorIO::OpenColorIO)
+    message(STATUS "hdMoonray: using standard OpenColorIO target")
+endif()
+
 # Our USD config doesn't specify TBB or Boost dependencies,
 # so we need to pull the in explicitly
 find_package(TBB REQUIRED)
@@ -141,5 +181,4 @@ install(FILES
     DESTINATION
         ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}-${PROJECT_VERSION}
 )
-
 

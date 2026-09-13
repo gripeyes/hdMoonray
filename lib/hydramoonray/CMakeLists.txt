@@ -14,6 +14,7 @@ target_sources(${component}
     PRIVATE
         basisCurves.cc
         camera.cc
+        ColorManagement.cc
         geometryBase.cc
         HdmLog.cc
         hydra2_utils.cc
@@ -47,6 +48,7 @@ set_property(TARGET ${component}
     PROPERTY PUBLIC_HEADER
         basisCurves.h
         camera.h
+        ColorManagement.h
         geometryBase.h
         HdmLog.h
         hydra2_utils.h
@@ -84,6 +86,11 @@ target_include_directories(${component}
         $<INSTALL_INTERFACE:include>
 )
 
+if(HDMOONRAY_HOUDINI_OCIO_INCLUDE_DIR)
+    target_include_directories(${component} BEFORE PRIVATE
+        ${HDMOONRAY_HOUDINI_OCIO_INCLUDE_DIR})
+endif()
+
 if (NOT IsDarwinPlatform)
     set(PlatformSpecificLibs atomic)
 endif()
@@ -98,6 +105,7 @@ target_link_libraries(${component}
         TBB::tbb
         hd hdsi  # pxr imaging
         usdImaging
+        ${HDMOONRAY_HOUDINI_OCIO_TARGET}
         Python::Module
         ${PlatformSpecificLibs}
 )

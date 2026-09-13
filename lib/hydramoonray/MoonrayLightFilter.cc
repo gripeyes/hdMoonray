@@ -87,7 +87,7 @@ MoonrayLightFilter::syncParams(const PrimAccess& access,
             if (val.IsEmpty()) {
                 (*attrIt).setToDefault();
             } else {
-                (*attrIt).set(val);
+                (*attrIt).setColorManaged(val, &renderDelegate.colorManagement());
             }
         }
     }

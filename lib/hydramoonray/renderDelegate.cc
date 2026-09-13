@@ -29,6 +29,8 @@ using namespace pxr;
 
 namespace hdMoonray {
 
+static const TfToken renderingColorSpaceToken("renderingColorSpace");
+
 
 HdMoonray_RenderDelegate::HdMoonray_RenderDelegate(Renderer* renderer)
     : HdRenderDelegate(),
@@ -55,6 +57,27 @@ HdMoonray_RenderDelegate::_constructor()
     mScene.renderer()->addDescriptors(mRenderSettingDescriptors);
     _PopulateDefaultSettings(mRenderSettingDescriptors);
     renderParam.This = this;
+
+    // HdRenderDelegate(settings) stores constructor settings without calling
+    // our SetRenderSetting override.  Apply the standard working-space setting
+    // before the scene initializes so texture DSOs see the correct bridge value
+    // on their first load.
+    const VtValue initialColorSpace = GetRenderSetting(renderingColorSpaceToken);
+    if (!initialColorSpace.IsEmpty()) {
+        TfToken colorSpace;
+        if (initialColorSpace.IsHolding<TfToken>()) {
+            colorSpace = initialColorSpace.UncheckedGet<TfToken>();
+        } else if (initialColorSpace.IsHolding<std::string>()) {
+            colorSpace = TfToken(initialColorSpace.UncheckedGet<std::string>());
+        }
+        if (mColorManagement.setRenderingColorSpace(colorSpace)) {
+            const std::string message =
+                "hdMoonray OCIO initial renderingColorSpace: " +
+                mColorManagement.diagnosticSummary();
+            if (mColorManagement.diagnosticNeedsWarning()) Logger::warn(message);
+            else Logger::info(message);
+        }
+    }
     mScene.initialize();
 }
 
@@ -329,9 +352,52 @@ HdMoonray_RenderDelegate::SetRenderSetting(TfToken const& key, VtValue const& va
     const std::string strippedKey = SdfPath::StripPrefixNamespace(key.GetString(),"moonray").first;
     HdRenderDelegate::SetRenderSetting(TfToken(strippedKey), value);
 
+    if (strippedKey == renderingColorSpaceToken.GetString()) {
+        TfToken colorSpace;
+        if (value.IsHolding<TfToken>()) colorSpace = value.UncheckedGet<TfToken>();
+        else if (value.IsHolding<std::string>()) colorSpace = TfToken(value.UncheckedGet<std::string>());
+        setRenderingColorSpace(colorSpace);
+    }
+
     if (options().getShowRenderSettingChanges()) {
         std::cout << "Render setting changed: " << strippedKey << " = " << value << std::endl;
     }
+}
+
+void
+HdMoonray_RenderDelegate::setRenderingColorSpace(const TfToken& token)
+{
+    if (!mColorManagement.setRenderingColorSpace(token)) return;
+
+    const std::string message =
+        "hdMoonray OCIO renderingColorSpace changed: " +
+        mColorManagement.diagnosticSummary();
+    if (mColorManagement.diagnosticNeedsWarning()) Logger::warn(message);
+    else Logger::info(message);
+
+    markColorDependentSprimsDirty();
+    markAllRprimsDirty(HdChangeTracker::DirtyMaterialId | HdChangeTracker::DirtyPrimvar);
+    if (mScene.renderer()) {
+        mScene.renderer()->invalidateAllTextureResources();
+        mScene.renderer()->restartRenderer();
+    }
+}
+
+void
+HdMoonray_RenderDelegate::markColorDependentSprimsDirty()
+{
+    // In Houdini's native Hydra 2 scene-index mode the legacy change tracker
+    // is read-only. Houdini recreates this delegate for renderingColorSpace
+    // because the setting is listed in restartrendersettings; explicit dirty
+    // propagation remains necessary for legacy/emulation clients.
+    if (!mRenderIndex || !mRenderIndex->GetEmulationSceneIndex()) return;
+    HdChangeTracker& tracker = mRenderIndex->GetChangeTracker();
+    for (const TfToken& type : {HdPrimTypeTokens->material, HdPrimTypeTokens->lightFilter}) {
+        for (const SdfPath& id : mRenderIndex->GetSprimSubtree(type, SdfPath::AbsoluteRootPath())) {
+            tracker.MarkSprimDirty(id, HdChangeTracker::AllDirty);
+        }
+    }
+    markAllLightsDirty(HdChangeTracker::AllDirty);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -435,7 +501,17 @@ void HdMoonray_RenderDelegate::markAllVolumesDirty(HdDirtyBits bits)
 
 void HdMoonray_RenderDelegate::markAllRprimsDirty(HdDirtyBits bits)
 {
-    if (mRenderIndex) mRenderIndex->GetChangeTracker().MarkAllRprimsDirty(bits);
+    if (!mRenderIndex || !mRenderIndex->GetEmulationSceneIndex()) return;
+
+    // MarkAllRprimsDirty() requires legacy change-tracker emulation and is
+    // rejected by Houdini 22's native Hydra 2 scene-index path.  Dirty the
+    // concrete rprims instead so a working-space change remains valid in both
+    // Hydra modes.
+    HdChangeTracker& tracker = mRenderIndex->GetChangeTracker();
+    for (const SdfPath& id :
+             mRenderIndex->GetRprimSubtree(SdfPath::AbsoluteRootPath())) {
+        tracker.MarkRprimDirty(id, bits);
+    }
 }
 
 }

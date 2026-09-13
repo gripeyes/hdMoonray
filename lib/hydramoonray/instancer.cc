@@ -8,6 +8,7 @@
 #include "tokens.h"
 
 #include <pxr/imaging/hd/sceneDelegate.h>
+#include <pxr/imaging/hd/primvarsSchema.h>
 #include <pxr/base/gf/rotation.h>
 #include <pxr/base/gf/vec2f.h>
 #include <pxr/base/gf/quath.h>
@@ -16,6 +17,23 @@
 using namespace pxr;
 
 namespace {
+
+TfToken primvarColorSpace(HdSceneDelegate* sceneDelegate,
+                          const SdfPath& primId,
+                          const TfToken& name)
+{
+    if (!sceneDelegate) return TfToken();
+    HdSceneIndexBaseRefPtr sceneIndex =
+        sceneDelegate->GetRenderIndex().GetTerminalSceneIndex();
+    if (!sceneIndex) return TfToken();
+    const HdSceneIndexPrim prim = sceneIndex->GetPrim(primId);
+    const HdPrimvarSchema primvar =
+        HdPrimvarsSchema::GetFromParent(prim.dataSource).GetPrimvar(name);
+    if (HdTokenDataSourceHandle colorSpace = primvar.GetColorSpace()) {
+        return colorSpace->GetTypedValue(0.0f);
+    }
+    return TfToken();
+}
 
 VtValue getElement(const VtValue& array, size_t index)
 {
@@ -117,6 +135,7 @@ HdMoonray_Instancer::Sync(HdSceneDelegate* sceneDelegate,
                 PrimvarInfo& info = mPrimvars[pv.name];
                 info.value = sceneDelegate->Get(id, pv.name);
                 info.role = pv.role;
+                info.colorSpace = primvarColorSpace(sceneDelegate, id, pv.name);
             }
         }
     }
@@ -234,10 +253,14 @@ HdMoonray_Instancer::makeInstanceGeometry(const SdfPath& prototypeId,
             if (v.empty()) continue; // don't crash on error
             VtVec3fArray out(count);
             for (size_t i = 0; i < count; ++i) out[i] = reinterpret_cast<const GfVec3f&>(v[indices[i] % v.size()]);
-            primvar.setData(name.GetString(), out, role);
+            primvar.setDataColorManaged(name.GetString(), VtValue(out), role,
+                                        &renderDelegate.colorManagement(),
+                                        p.second.colorSpace);
         } else if (value.IsHolding<GfVec3f>()) {
             const GfVec3f& v = value.UncheckedGet<GfVec3f>();
-            primvar.setData(name.GetString(), v, role);
+            primvar.setDataColorManaged(name.GetString(), VtValue(v), role,
+                                        &renderDelegate.colorManagement(),
+                                        p.second.colorSpace);
         } else if (value.IsHolding<VtIntArray>()) {
             const VtIntArray& v = value.UncheckedGet<VtIntArray>();
             if (v.empty()) continue; // don't crash on error

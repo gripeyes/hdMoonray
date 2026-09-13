@@ -320,7 +320,7 @@ HdMoonray_Light::syncParams(const SdfPath& id,
         std::string moonrayAttrName = "moonray:" + attrName;
         VtValue val = sceneDelegate->GetLightParamValue(id, TfToken(moonrayAttrName));
         if (!val.IsEmpty()) {
-            (*attrIt).set(val);
+            (*attrIt).setColorManaged(val, &renderDelegate.colorManagement());
             continue;
         }
         // if GetLightParamValue goes away, custom attrs will need to be set by "inputs:moonray:name",
@@ -329,7 +329,7 @@ HdMoonray_Light::syncParams(const SdfPath& id,
         moonrayAttrName = "inputs:moonray:" + attrName;
         val = sceneDelegate->GetLightParamValue(id, TfToken(moonrayAttrName));
         if (!val.IsEmpty()) {
-            (*attrIt).set(val);
+            (*attrIt).setColorManaged(val, &renderDelegate.colorManagement());
             continue;
         }
 
@@ -421,6 +421,7 @@ HdMoonray_Light::syncParams(const SdfPath& id,
                         color[2] *= tempRgb[2];
                     }
                 }
+                color = renderDelegate.colorManagement().toWorkingSpace(color);
                 (*attrIt).setColor(color);
                 continue;
 
@@ -432,7 +433,7 @@ HdMoonray_Light::syncParams(const SdfPath& id,
                 // schema will cause correct default to be returned
                 val = sceneDelegate->GetLightParamValue(id, luxName);
                 if (!val.IsEmpty()) {
-                    (*attrIt).set(val);
+                    (*attrIt).setColorManaged(val, &renderDelegate.colorManagement());
                     continue;
                 }
             }
@@ -554,11 +555,21 @@ HdMoonray_Light::Sync(HdSceneDelegate *sceneDelegate,
             categoriesChanged = true;
         }
         // Need to call Sync() on all geometry to get categories copied into LightSets
-        if (categoriesChanged) {
+        if (categoriesChanged &&
+            sceneDelegate->GetRenderIndex().GetEmulationSceneIndex()) {
             // in 0.22.5, DirtyCategories seems to be ignored. We can force a sync using
-            // DirtyMaterialId even though it isn't strict;y right...
-            sceneDelegate->GetRenderIndex().GetChangeTracker().MarkAllRprimsDirty(
-                HdChangeTracker::DirtyCategories | HdChangeTracker::DirtyMaterialId);
+            // DirtyMaterialId even though it isn't strictly right. Houdini 22's
+            // native Hydra 2 scene-index path rejects MarkAllRprimsDirty(), so
+            // mark each concrete rprim instead.
+            HdRenderIndex& renderIndex = sceneDelegate->GetRenderIndex();
+            HdChangeTracker& tracker = renderIndex.GetChangeTracker();
+            for (const SdfPath& rprimId :
+                     renderIndex.GetRprimSubtree(SdfPath::AbsoluteRootPath())) {
+                tracker.MarkRprimDirty(
+                    rprimId,
+                    HdChangeTracker::DirtyCategories |
+                        HdChangeTracker::DirtyMaterialId);
+            }
         }
     }
 

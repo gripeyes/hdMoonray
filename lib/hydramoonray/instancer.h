@@ -49,7 +49,11 @@ public:
 private:
     void applyPrimvarOverrides(MoonrayObject obj, int index);
     
-    struct PrimvarInfo { pxr::VtValue value; pxr::TfToken role; };
+    struct PrimvarInfo {
+        pxr::VtValue value;
+        pxr::TfToken role;
+        pxr::TfToken colorSpace;
+    };
     std::map<pxr::TfToken, PrimvarInfo> mPrimvars;
     pxr::GfMatrix4d mXform;
 

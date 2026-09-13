@@ -8,6 +8,10 @@
 #include "shader_utils.h"
 
 #include <pxr/imaging/hd/material.h>
+#include <pxr/imaging/hd/materialSchema.h>
+#include <pxr/imaging/hd/materialNodeSchema.h>
+#include <pxr/imaging/hd/materialNodeParameterSchema.h>
+#include <pxr/imaging/hd/renderIndex.h>
 
 // turn this on to use a proxy SwitchMaterial for terminals, 
 // so that assignments remain valid even if the material network is modified
@@ -49,12 +53,57 @@ getObjectAttributeValue(
     return MoonrayObject();
 }
 
+// Houdini 22 delivers parameter color-space metadata through the Hydra 2
+// material scene-index schema.  HdMaterialNetworkMap, which this delegate
+// still uses for topology, does not retain that field, so read it alongside
+// the legacy network instead of discarding authored metadata.
+TfToken
+getNodeParameterColorSpace(HdSceneDelegate* sceneDelegate,
+                           const SdfPath& materialId,
+                           const SdfPath& nodePath,
+                           const TfToken& parameterName)
+{
+    if (!sceneDelegate) return TfToken();
+    HdSceneIndexBaseRefPtr sceneIndex =
+        sceneDelegate->GetRenderIndex().GetTerminalSceneIndex();
+    if (!sceneIndex) return TfToken();
+
+    const HdSceneIndexPrim prim = sceneIndex->GetPrim(materialId);
+    const HdMaterialSchema material = HdMaterialSchema::GetFromParent(prim.dataSource);
+    if (!material.IsDefined()) return TfToken();
+
+    const TfToken candidates[] = {
+        TfToken(nodePath.MakeRelativePath(materialId).GetString()),
+        nodePath.GetNameToken(),
+        TfToken(nodePath.GetString())
+    };
+
+    TfTokenVector contexts = material.GetRenderContexts();
+    contexts.push_back(HdMaterialSchemaTokens->universalRenderContext);
+    for (const TfToken& context : contexts) {
+        const HdMaterialNodeContainerSchema nodes =
+            material.GetMaterialNetwork(context).GetNodes();
+        for (const TfToken& candidate : candidates) {
+            if (candidate.IsEmpty()) continue;
+            const HdMaterialNodeSchema node = nodes.Get(candidate);
+            if (!node.IsDefined()) continue;
+            const HdMaterialNodeParameterSchema parameter =
+                node.GetParameters().Get(parameterName);
+            if (HdTokenDataSourceHandle colorSpace = parameter.GetColorSpace()) {
+                return colorSpace->GetTypedValue(0.0f);
+            }
+        }
+    }
+    return TfToken();
+}
+
 // construct a Moonray shader SceneObject from a HdMaterialNode, and set its parameters
 MoonrayObject
 makeMoonrayShader(
     HdMoonray_RenderDelegate& renderDelegate,
     HdSceneDelegate *sceneDelegate,
     const HdMaterialNode& node,
+    const SdfPath& materialId,
     const SdfPath& nodeId) 
 {
     MoonrayObject shaderObj = renderDelegate.scene().create(node.identifier.GetString(), nodeId);
@@ -70,7 +119,11 @@ makeMoonrayShader(
                         MoonrayObject obj = getObjectAttributeValue(*attrIt, valIt->second, renderDelegate, sceneDelegate);
                         (*attrIt).set(obj);
                     } else {
-                        (*attrIt).set(valIt->second);
+                        (*attrIt).setColorManaged(
+                            valIt->second,
+                            &renderDelegate.colorManagement(),
+                            getNodeParameterColorSpace(sceneDelegate, materialId,
+                                                       node.path, valIt->first));
                     }
                 } else {
                     (*attrIt).setToDefault();
@@ -182,6 +235,7 @@ getTerminalInternal(const SdfPath& id,
         next = makeMoonrayShader(renderDelegate,
                                  sceneDelegate,
                                  node,
+                                 id,
                                  node.path.MakeAbsolutePath(id));
         if (next.isValid()) last = next; // HDM-368 : don't give up on error
     }
@@ -266,6 +320,7 @@ getNodeByConnection(const SdfPath& id,
             MoonrayObject shader = makeMoonrayShader(renderDelegate, 
                                                      sceneDelegate, 
                                                      node, 
+                                                     id,
                                                      node.path.MakeAbsolutePath(id));
             if (shader.isNull()) continue;
             if (node.path == inputId) ret = shader;

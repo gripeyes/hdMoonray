@@ -113,7 +113,8 @@ private:
     
 
     // creates/updates userData for a primvar
-    void primvarUserData(HdMoonray_RenderDelegate& renderDelegate,
+    void primvarUserData(pxr::HdSceneDelegate* sceneDelegate,
+                         HdMoonray_RenderDelegate& renderDelegate,
                          const pxr::TfToken& name, const pxr::VtValue& value,
                          const pxr::HdInterpolation& interp, const pxr::TfToken& role);
 

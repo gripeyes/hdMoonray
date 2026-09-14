@@ -1,0 +1,23 @@
+#usda 1.0
+(
+    metersPerUnit = 1
+)
+
+def Camera "camera"
+{
+    float3 xformOp:translate = (0, 0, 5)
+    uniform token[] xformOpOrder = ["xformOp:translate"]
+}
+
+def Plane "plane"
+{
+    double width = 2
+    double length = 4
+}
+
+def RectLight "light"
+{
+    float inputs:width = 2
+    float inputs:height = 3
+    bool inputs:normalize = true
+}

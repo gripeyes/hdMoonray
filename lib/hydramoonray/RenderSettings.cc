@@ -34,6 +34,7 @@ TF_DEFINE_PRIVATE_TOKENS(Tokens,
     (executionMode)
     (generateOnly)
     (maxMeshResolution)
+    (stageMetersPerUnit)
 );
 
 }
@@ -108,6 +109,8 @@ void RenderSettings::apply()
     {
         UpdateGuard guard(sv);
         const SceneClass& sceneClass = sv.getSceneClass();
+        const VtValue stageMetersPerUnit =
+            mDelegate.GetRenderSetting(Tokens->stageMetersPerUnit);
         for (auto it = sceneClass.beginAttributes(); it != sceneClass.endAttributes(); ++it) {
 
             const std::string& attrName = (*it)->getName();
@@ -122,6 +125,8 @@ void RenderSettings::apply()
                 val = mDelegate.GetRenderSetting(key);
                 if (not val.IsEmpty()) {
                     ValueConverter::setAttribute(&sv, *it, val);
+                } else if (attrName == "scene_scale" && !stageMetersPerUnit.IsEmpty()) {
+                    ValueConverter::setAttribute(&sv, *it, stageMetersPerUnit);
                 }
             }
         }

@@ -23,13 +23,17 @@
 function(add_hats_test test_basename)
     # test_basename:                 basename of tests. By convention includes relative folder structure, example: geometry_basis_curves
 
+    set(options HUSK)
     set(oneValueArgs CAMERA RENDER_SETTINGS)
-    cmake_parse_arguments(ARG "" "${oneValueArgs}" "" ${ARGN})
+    cmake_parse_arguments(ARG "${options}" "${oneValueArgs}" "" ${ARGN})
     if (DEFINED ARG_CAMERA)
         set(camera_opt "cam=${ARG_CAMERA}")
     endif()
     if (DEFINED ARG_RENDER_SETTINGS)
         set(rs_opt "rs=${ARG_RENDER_SETTINGS}")
+    endif()
+    if (ARG_HUSK)
+        set(husk_opt "husk")
     endif()
 
     set(input_usd ${CMAKE_CURRENT_SOURCE_DIR}/${test_basename}.usd)
@@ -43,7 +47,7 @@ function(add_hats_test test_basename)
   
     add_test(NAME ${generate_test_name}
              WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-             COMMAND  python "${CMAKE_SOURCE_DIR}/cmake/generate_rdla.py" "${input_usd}" "${generated_rdl}" ${rs_opt} ${camera_opt}
+             COMMAND ${Python_EXECUTABLE} "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/generate_rdla.py" "${input_usd}" "${generated_rdl}" ${rs_opt} ${camera_opt} ${husk_opt}
     )
     set_tests_properties(${generate_test_name} PROPERTIES
             LABELS "generate"

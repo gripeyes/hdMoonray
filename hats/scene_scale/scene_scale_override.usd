@@ -1,0 +1,54 @@
+#usda 1.0
+(
+    metersPerUnit = 0.01
+)
+
+def Camera "camera"
+{
+    float3 xformOp:translate = (0, 0, 5)
+    uniform token[] xformOpOrder = ["xformOp:translate"]
+}
+
+def Plane "plane"
+{
+    double width = 2
+    double length = 4
+}
+
+def RectLight "light"
+{
+    float inputs:width = 2
+    float inputs:height = 3
+    bool inputs:normalize = true
+}
+
+def Scope "Render"
+{
+    def RenderVar "normal"
+    {
+        custom string driver:parameters:aov:husk:name = "normal"
+        token dataType = "float3"
+        string sourceName = "normal"
+    }
+
+    def RenderProduct "product"
+    {
+        rel orderedVars = </Render/normal>
+        token productName = "/tmp/scene_scale_override.exr"
+    }
+
+    def RenderSettings "settings"
+    {
+        rel products = </Render/product>
+        rel camera = </camera>
+        int2 resolution = (16, 16)
+        custom float moonray:sceneVariable:scene_scale = 0.5
+    }
+
+    def RenderSettings "stageSettings"
+    {
+        rel products = </Render/product>
+        rel camera = </camera>
+        int2 resolution = (16, 16)
+    }
+}

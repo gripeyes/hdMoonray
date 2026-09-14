@@ -421,8 +421,13 @@ HdMoonray_RenderDelegate::applySettings()
 void
 HdMoonray_RenderDelegate::resetSettingsToDefaults()
 {
+    static const TfToken stageMetersPerUnit("stageMetersPerUnit");
+    const VtValue stageScale = GetRenderSetting(stageMetersPerUnit);
     _settingsMap.clear();
     _PopulateDefaultSettings(mRenderSettingDescriptors);
+    if (!stageScale.IsEmpty()) {
+        _settingsMap[stageMetersPerUnit] = stageScale;
+    }
     _settingsVersion++; // force update on next applySettings() call
     if (options().getShowRenderSettingChanges()) {
         std::cout << "Render settings reset to defaults" << std::endl;

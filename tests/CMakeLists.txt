@@ -1,0 +1,8 @@
+add_executable(hdmoonray_primvar_sampling_test TestPrimvarSampling.cc)
+target_link_libraries(hdmoonray_primvar_sampling_test PRIVATE hydramoonray)
+HdMoonray_cxx_compile_features(hdmoonray_primvar_sampling_test)
+HdMoonray_cxx_compile_definitions(hdmoonray_primvar_sampling_test)
+add_test(NAME hdmoonray_primvar_sampling COMMAND hdmoonray_primvar_sampling_test)
+set_tests_properties(hdmoonray_primvar_sampling PROPERTIES
+    LABELS "unit"
+    ENVIRONMENT "RDL2_DSO_PATH=${CMAKE_INSTALL_PREFIX}/rdl2dso.proxy:${CMAKE_INSTALL_PREFIX}/rdl2dso")

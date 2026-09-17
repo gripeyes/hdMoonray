@@ -150,6 +150,9 @@ add_subdirectory(plugin)
 add_subdirectory(cmd)
 add_subdirectory(sessions)
 add_subdirectory(hats)
+if(BUILD_TESTING)
+    add_subdirectory(tests)
+endif()
 
 # ================================================
 # Install
@@ -181,4 +184,3 @@ install(FILES
     DESTINATION
         ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}-${PROJECT_VERSION}
 )
-

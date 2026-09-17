@@ -5,28 +5,6 @@ This repository contains the Hydra plugin (delegate) for MoonRay, HdMoonRay.
 This allows Moonray to be used to render the viewer of DCC applications,
 and as part of the command-line tool to render USD using Moonray.
 
-## Houdini 22 timeline updates
-
-Motion-sampled point updates must write the complete vertex arrays to RDL's
-`vertex_list_0` and `vertex_list_1`. Previously, this path passed one vertex instead
-of an array; the resulting attribute type mismatch left the previous geometry in
-place when scrubbing the timeline. The fix changes only those two assignments.
-It does not change AOVs, convergence, viewport/product classification, Arras
-sessions, or the transport protocol.
-
-With `BUILD_TESTING=ON`, run `ctest -R hdmoonray_primvar_sampling --output-on-failure`
-from the build directory, using the same Houdini runtime library environment as
-the build. The regression exercises the production points dispatch for
-`1 -> 10 -> 1`, verifies every vertex in both motion samples, and checks empty
-arrays. It fails against the previous implementation.
-
-Validated on Houdini 22.0.440 with the normal Arras-backed **Moonray** delegate:
-timeline changes and rapid scrubbing update geometry, an unchanged frame does
-not restart rendering, and a light edit updates IPR. An installed-delegate USD
-render produces non-black pixels and its test-created MCRT process exits after
-teardown. The shading tests also pass. After installing the rebuilt shared Hydra
-library and normal plugin, restart Houdini to load the updated binaries.
-
 ## Render Settings
 There are a number of switches that control the Render. In usdview these are under
 "View/Hydra Settings".  In Houdini the "eye" button in the lower-right of the Viewer

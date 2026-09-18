@@ -4,6 +4,7 @@
 #include "renderPass.h"
 #include "renderBuffer.h"
 #include "renderDelegate.h"
+#include "geometryBase.h"
 
 #include "camera.h"
 #include "tokens.h"
@@ -25,6 +26,14 @@ HdMoonray_RenderPass::~HdMoonray_RenderPass()
 bool
 HdMoonray_RenderPass::IsConverged() const
 {
+    // Sync may stage a scene edit after the previous frame converged. Hydra
+    // must execute again to submit it, even if final presentation was latched.
+    if (mRenderDelegate.renderer().isUpdateActive()) {
+        mDeferIsConverged = false;
+        mProductRenderComplete = false;
+        return false;
+    }
+
     if (mProductRenderComplete) {
         return true;
     }
@@ -281,6 +290,22 @@ HdMoonray_RenderPass::_Execute(const HdRenderPassStateSharedPtr& renderPassState
                                const TfTokenVector& renderTags)
 {
     HdSceneIndexBaseRefPtr sceneIndex = GetRenderIndex()->GetTerminalSceneIndex();
+
+    // A light-link category can keep its name while its contents change.
+    // Refresh derived assignments after all lights sync, regardless of whether
+    // Hydra schedules another geometry Sync for the changed membership.
+    if (mRenderDelegate.scene().consumeCategoryChanges()) {
+        for (const SdfPath& id :
+             GetRenderIndex()->GetRprimSubtree(SdfPath::AbsoluteRootPath())) {
+            // RenderIndex exposes a const view; these delegate-owned rprims
+            // are writable here, after Hydra synchronization has completed.
+            if (auto* geometry = dynamic_cast<HdMoonray_GeometryBase*>(
+                    const_cast<HdRprim*>(GetRenderIndex()->GetRprim(id)))) {
+                geometry->refreshLightAssignments(
+                    GetRenderIndex()->GetSceneDelegateForRprim(id), mRenderDelegate);
+            }
+        }
+    }
     
     // Determine if we should use a render settings prim or legacy render settings.
     HdMoonray_RenderSettings* rsprim = nullptr;

@@ -6,3 +6,12 @@ add_test(NAME hdmoonray_primvar_sampling COMMAND hdmoonray_primvar_sampling_test
 set_tests_properties(hdmoonray_primvar_sampling PROPERTIES
     LABELS "unit"
     ENVIRONMENT "RDL2_DSO_PATH=${CMAKE_INSTALL_PREFIX}/rdl2dso.proxy:${CMAKE_INSTALL_PREFIX}/rdl2dso")
+
+add_executable(hdmoonray_renderpass_convergence_test TestRenderPassConvergence.cc)
+target_link_libraries(hdmoonray_renderpass_convergence_test PRIVATE hydramoonray)
+HdMoonray_cxx_compile_features(hdmoonray_renderpass_convergence_test)
+HdMoonray_cxx_compile_definitions(hdmoonray_renderpass_convergence_test)
+add_test(NAME hdmoonray_renderpass_convergence COMMAND hdmoonray_renderpass_convergence_test)
+set_tests_properties(hdmoonray_renderpass_convergence PROPERTIES
+    LABELS "unit"
+    ENVIRONMENT "RDL2_DSO_PATH=${CMAKE_INSTALL_PREFIX}/rdl2dso.proxy:${CMAKE_INSTALL_PREFIX}/rdl2dso")

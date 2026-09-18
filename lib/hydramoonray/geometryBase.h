@@ -43,6 +43,10 @@ public:
     const pxr::SdfPath& getId() const { return rprim.GetId(); }
     bool isPrimvarUsed(const pxr::TfToken& name) { return mAppliedPrimvars.count(name) > 0; }
 
+    // Refresh derived light assignments without dirtying a native scene index.
+    void refreshLightAssignments(pxr::HdSceneDelegate* sceneDelegate,
+                                 HdMoonray_RenderDelegate& renderDelegate);
+
 protected:
 
    // RDL geometry object generated for the rprim

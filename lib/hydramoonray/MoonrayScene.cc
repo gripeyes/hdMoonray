@@ -186,7 +186,9 @@ MoonrayScene::setCategory(const MoonrayObject& obj,
                           const TfToken& category)
 {
     std::lock_guard<std::mutex> lock(mCategoriesMutex);
-    mCategoryContents[type][category].emplace(obj);
+    if (mCategoryContents[type][category].emplace(obj).second) {
+        mCategoriesChanged = true;
+    }
 }
 
 void
@@ -195,7 +197,18 @@ MoonrayScene::releaseCategory(const MoonrayObject& obj,
                               const TfToken& category)
 {
     std::lock_guard<std::mutex> lock(mCategoriesMutex);
-    mCategoryContents[type][category].erase(obj);
+    if (mCategoryContents[type][category].erase(obj)) {
+        mCategoriesChanged = true;
+    }
+}
+
+bool
+MoonrayScene::consumeCategoryChanges()
+{
+    std::lock_guard<std::mutex> lock(mCategoriesMutex);
+    const bool changed = mCategoriesChanged;
+    mCategoriesChanged = false;
+    return changed;
 }
 
 void

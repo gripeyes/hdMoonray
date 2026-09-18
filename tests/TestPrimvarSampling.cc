@@ -6,6 +6,10 @@
 #include <hydramoonray/renderDelegate.h>
 #include <pxr/imaging/hd/renderIndex.h>
 #include <pxr/imaging/hd/sceneDelegate.h>
+#include <scene_rdl2/scene/rdl2/Geometry.h>
+#include <scene_rdl2/scene/rdl2/Layer.h>
+#include <scene_rdl2/scene/rdl2/Light.h>
+#include <scene_rdl2/scene/rdl2/LightSet.h>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
@@ -18,6 +22,7 @@ class Samples final : public HdSceneDelegate {
 public:
     explicit Samples(HdRenderIndex* index) : HdSceneDelegate(index, SdfPath("/samples")) {}
     VtVec3fArray first, second;
+    VtArray<TfToken> GetCategories(const SdfPath&) override { return {}; }
     size_t SamplePrimvar(const SdfPath&, const TfToken&, float start, float end,
                          size_t capacity, float* times, VtValue* values) override
     {
@@ -76,6 +81,35 @@ int main()
         probe.sample(samples, delegate);
         check(object, "vertex_list_0", samples.first);
         check(object, "vertex_list_1", samples.second);
+
+        // Native scene-index rig replacement can sync only lights, not mesh
+        // categories. Refresh the existing layer assignment in that case.
+        auto& scene = delegate.scene();
+        auto firstLight = scene.createObject("RectLight", SdfPath("/lights/first"));
+        auto secondLight = scene.createObject("RectLight", SdfPath("/lights/second"));
+        scene.addLight(); // prevent the default dome from entering these sets
+        scene.setCategory(firstLight, LightCategory, TfToken());
+        if (!scene.consumeCategoryChanges()) throw std::runtime_error("new light membership not recorded");
+        if (scene.consumeCategoryChanges()) throw std::runtime_error("unchanged categories stayed dirty");
+        const auto* layer = scene.sceneContext().getSceneObject("/DEFAULT/defaultLayer")->asA<rdl2::Layer>();
+        for (const MoonrayObject light : {firstLight, secondLight, firstLight}) {
+            scene.releaseCategory(firstLight, LightCategory, TfToken());
+            scene.releaseCategory(secondLight, LightCategory, TfToken());
+            scene.setCategory(light, LightCategory, TfToken());
+            probe.refreshLightAssignments(&samples, delegate);
+            const auto assignment = layer->begin(object->asA<rdl2::Geometry>());
+            if (assignment == layer->end(object->asA<rdl2::Geometry>())) {
+                throw std::runtime_error("missing refreshed geometry assignment");
+            }
+            const auto* lights = layer->lookupLightSet(*assignment);
+            if (!lights || lights->getLights().size() != 1 ||
+                !lights->contains(light.sceneObjectAs<rdl2::Light>())) {
+                throw std::runtime_error("stale rig light assignment");
+            }
+            scene.consumeCategoryChanges();
+            scene.setCategory(light, LightCategory, TfToken());
+            if (scene.consumeCategoryChanges()) throw std::runtime_error("duplicate light membership caused update");
+        }
     } catch (const std::exception& e) {
         std::cerr << e.what() << '\n';
         return 1;

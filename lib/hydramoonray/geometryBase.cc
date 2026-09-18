@@ -160,6 +160,16 @@ HdMoonray_GeometryBase::syncPrimitiveAttributes()
 }
 
 void
+HdMoonray_GeometryBase::refreshLightAssignments(HdSceneDelegate* sceneDelegate,
+                                              HdMoonray_RenderDelegate& renderDelegate)
+{
+    if (!sceneDelegate || mGeometry.isNull()) return;
+    UpdateGuard guard(renderDelegate, mGeometry);
+    HdDirtyBits bits = HdChangeTracker::DirtyCategories;
+    assign(sceneDelegate, renderDelegate, &bits);
+}
+
+void
 HdMoonray_GeometryBase::assign(HdSceneDelegate* sceneDelegate,
                       HdMoonray_RenderDelegate& renderDelegate,
                       HdDirtyBits* dirtyBits)
@@ -295,4 +305,3 @@ HdMoonray_GeometryBase::restoreVisibility(HdSceneDelegate* sceneDelegate)
 }
 
 }
-

@@ -56,6 +56,9 @@ public:
     
     void initialize();
 
+    // Consume membership changes after sprim synchronization, before submission.
+    bool consumeCategoryChanges();
+
     // read only access to the scene context
     const scene_rdl2::rdl2::SceneContext& sceneContext() const;
     // beginUpdate() must be called before modifying the scene context
@@ -155,6 +158,7 @@ private:
     std::mutex mCreateMutex;
     std::mutex mLayerMutex;
     std::mutex mCategoriesMutex;
+    bool mCategoriesChanged = false;
     std::mutex mCacheMutex;
 
     std::mutex mSimplifyPathMutex;
